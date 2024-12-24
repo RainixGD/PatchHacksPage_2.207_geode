@@ -1,0 +1,36 @@
+{
+    "activeLayers": ["MenuLayer", "PauseLayer", "EditorPauseLayer"],
+    "hacks": [
+        {
+            "name": "Unlock Demons",
+            "patches": [
+                {
+                    "address": "0x3064F4",
+                    "on": "90 E9 DC 01 00 00"
+                },
+				{
+                    "address": "0x308DAE",
+                    "on": "90 E9 3D 01 00 00"
+                }
+            ]
+        },
+		{
+			"name": "Unlock Icons",
+			"patches": [
+				{
+					"address": "0x179532",
+					"on": "90 90 90 90 90 90 90 B8 01 00 00 00"
+				}
+			]
+		},
+		{
+			"name": "Unlock Colors (without locks)",
+			"patches": [
+				{
+					"address": "0x179909",
+					"on": "90 90 90 90 90 90 90 B8 01 00 00 00"
+				}
+			]
+		}
+    ]
+}

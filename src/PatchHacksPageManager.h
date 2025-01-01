@@ -10,6 +10,7 @@ class PatchHacksPageManager {
 		FileNotFound,
 		ParsingError,
 		PatchFormatError,
+		EmptyMenuError,
 	};
 
 	std::vector<std::string> activeLayers;

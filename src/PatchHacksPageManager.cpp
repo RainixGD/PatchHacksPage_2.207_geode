@@ -33,6 +33,9 @@ PatchHacksPageManager::DataLoadingResult PatchHacksPageManager::loadData() {
 		}
 
 		auto hacks = root["hacks"];
+
+		if (hacks.size() == 0) return EmptyMenuError;
+
 		for (const auto& hack : hacks) {
 			if (!hack.contains("name") || !hack["name"].is_string() ||
 				!hack.contains("patches") || !hack["patches"].is_array()) {
@@ -140,14 +143,17 @@ void PatchHacksPageManager::onMenuLayer(MenuLayer* layer) {
 
 		std::string errorText;
 		switch (loadingStatus) {
-		case PatchHacksPageManager::FileNotFound:
+		case FileNotFound:
 			errorText = "Can't find 'hackPanel.json' in ./Resources";
 			break;
-		case PatchHacksPageManager::ParsingError:
+		case ParsingError:
 			errorText = "Can't parse 'hackPanel.json'";
 			break;
-		case PatchHacksPageManager::PatchFormatError:
+		case PatchFormatError:
 			errorText = "Can't parse patch format";
+			break;
+		case EmptyMenuError:
+			errorText = "There are no patchhacks to load";
 			break;
 		}
 
@@ -155,7 +161,7 @@ void PatchHacksPageManager::onMenuLayer(MenuLayer* layer) {
 
 		auto errorLabel = CCLabelBMFont::create(errorText.c_str(), "bigFont.fnt");
 		errorLabel->setColor({ 255, 0, 0 });
-		errorLabel->setScale(0.6);
+		errorLabel->setScale(0.4);
 		errorLabel->setPosition({ size.width / 2, size.height - 10 });
 		layer->addChild(errorLabel);
 

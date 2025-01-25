@@ -17,6 +17,8 @@ add_library(${PROJECT_NAME} SHARED
     src/PatchHackNode.cpp
     src/PatchHacksPageManager.cpp
     src/PatchHacksPopup.cpp
+    src/ErrorsManager/ErrorsManager.cpp
+    src/ErrorsManager/ErrorsPopup.cpp
 )
 
 if (NOT DEFINED ENV{GEODE_SDK})

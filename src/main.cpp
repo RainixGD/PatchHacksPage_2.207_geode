@@ -5,11 +5,13 @@
 #include <Geode/modify/AppDelegate.hpp>
 
 #include "./PatchHacksPageManager.h"
+#include "./ErrorsManager/ErrorsManager.h"
 
 class $modify(MenuLayer) {
 	bool init() {
 		if (!MenuLayer::init()) return false;
 		PatchHacksPageManager::getInstance()->onMenuLayer(this);
+		ErrorsManager::onMenuLayer(this);
 		return true;
 	}
 };

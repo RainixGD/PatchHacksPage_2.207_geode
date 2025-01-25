@@ -2,78 +2,123 @@
 #include "./PatchHack.h"
 #include "./PatchHacksPopup.h"
 #include "./BytePatch.h"
+#include "./ErrorsManager/ErrorsManager.h"
 
 void PatchHacksPageManager::init() {
-	loadingStatus = loadData();
-	if (loadingStatus == OK)
+	isOk = loadData();
+	if (isOk)
 		loadStatesFile();
 }
 
-PatchHacksPageManager::DataLoadingResult PatchHacksPageManager::loadData() {
+bool PatchHacksPageManager::loadData() {
+    std::ifstream file("Resources/hackPanel.json");
+    if (!file) {
+        ErrorsManager::addError("Patch Hacks Page: File 'Resources/hackPanel.json' not found or unable to open.", ErrorsManager::Error);
+        return false;
+    }
 
-	std::ifstream file("Resources/hackPanel.json");
-	if (!file) return FileNotFound;
-	std::ostringstream buffer;
-	buffer << file.rdbuf();
-	std::string fileContent = buffer.str();
+    std::ostringstream buffer;
+    try {
+        buffer << file.rdbuf();
+    }
+    catch (const std::ios_base::failure& e) {
+        ErrorsManager::addError("Patch Hacks Page: Failed to read from file 'Resources/hackPanel.json'. IOError: " + std::string(e.what()), ErrorsManager::Error);
+        file.close();
+        return false;
+    }
 
-	file.close();
+    std::string fileContent = buffer.str();
+    file.close();
 
-	try {
-		auto root = nlohmann::json::parse(fileContent);
+    if (fileContent.empty()) {
+        ErrorsManager::addError("Patch Hacks Page: 'Resources/hackPanel.json' is empty.", ErrorsManager::Error);
+        return false;
+    }
 
-		if (!root.contains("activeLayers") || !root["activeLayers"].is_array() ||
-			!root.contains("hacks") || !root["hacks"].is_array()) {
-			return ParsingError;
-		}
+    try {
+        auto root = nlohmann::json::parse(fileContent);
 
-		for (const auto& layer : root["activeLayers"]) {
-			if (!layer.is_string()) return ParsingError;
-			activeLayers.push_back(layer.get<std::string>());
-		}
+        if (!root.contains("activeLayers") || !root["activeLayers"].is_array() ||
+            !root.contains("hacks") || !root["hacks"].is_array()) {
+            ErrorsManager::addError("Patch Hacks Page: JSON does not contain required 'activeLayers' or 'hacks' properties, or they are not arrays.", ErrorsManager::Error);
+            return false;
+        }
 
-		auto hacks = root["hacks"];
+        for (const auto& layer : root["activeLayers"]) {
+            if (!layer.is_string()) {
+                ErrorsManager::addError("Patch Hacks Page: Each 'activeLayer' must be a string.", ErrorsManager::Error);
+                return false;
+            }
+            activeLayers.push_back(layer.get<std::string>());
+        }
 
-		if (hacks.size() == 0) return EmptyMenuError;
+        auto hacks = root["hacks"];
+        if (hacks.size() == 0) {
+            ErrorsManager::addError("Patch Hacks Page: No hacks found in the JSON.", ErrorsManager::Error);
+            return false;
+        }
 
-		for (const auto& hack : hacks) {
-			if (!hack.contains("name") || !hack["name"].is_string() ||
-				!hack.contains("patches") || !hack["patches"].is_array()) {
-				return ParsingError;
-			}
+        for (const auto& hack : hacks) {
+            if (!hack.contains("name") || !hack["name"].is_string() ||
+                !hack.contains("patches") || !hack["patches"].is_array()) {
+                ErrorsManager::addError("Patch Hacks Page: Missing or invalid properties in hack (name or patches).", ErrorsManager::Error);
+                return false;
+            }
 
-			auto patches = hack["patches"];
-			std::vector<BytePatch*> patchesVector;
+            auto patches = hack["patches"];
+            std::vector<BytePatch*> patchesVector;
 
-			for (const auto& patch : patches) {
-				if (!patch.contains("address") || !patch["address"].is_string() ||
-					!patch.contains("on") || !patch["on"].is_string()) {
-					return ParsingError;
-				}
+            for (const auto& patch : patches) {
+                if (!patch.contains("address") || !patch["address"].is_string() ||
+                    !patch.contains("on") || !patch["on"].is_string()) {
+                    ErrorsManager::addError("Patch Hacks Page: Missing or invalid properties in patch (address or on bytes).", ErrorsManager::Error);
+                    return false;
+                }
 
-				std::string address = patch["address"];
-				std::string on = patch["on"];
-				std::optional<std::string> off = (patch.contains("off") && patch["off"].is_string())
-					? std::optional<std::string>(patch["off"])
-					: std::nullopt;
+                std::string address = patch["address"];
+                std::string on = patch["on"];
+                std::optional<std::string> off = (patch.contains("off") && patch["off"].is_string())
+                    ? std::optional<std::string>(patch["off"])
+                    : std::nullopt;
 
-				auto newPatch = BytePatch::create(address, on, off);
-				if (!newPatch) return PatchFormatError;
-				patchesVector.push_back(newPatch);
-			}
+                auto newPatch = BytePatch::create(address, on, off);
+                if (!newPatch) {
+                    ErrorsManager::addError("Patch Hacks Page: Failed to create patch from provided data (address: " + address + ").", ErrorsManager::Error);
+                    return false;
+                }
+                patchesVector.push_back(newPatch);
+            }
 
-			auto patchHack = PatchHack::create(hack["name"], patchesVector);
-			this->hacks.push_back(patchHack);
-		}
-	}
-	catch (const nlohmann::json::exception& e) {
-		return ParsingError;
-	}
-	catch (...) {
-		return ParsingError;
-	}
+            auto patchHack = PatchHack::create(hack["name"], patchesVector);
+            if (!patchHack) {
+                ErrorsManager::addError("Patch Hacks Page: Failed to create patch hack for " + hack["name"].get<std::string>() + ".", ErrorsManager::Error);
+                return false;
+            }
+            this->hacks.push_back(patchHack);
+        }
+    }
+    catch (const nlohmann::json::parse_error& e) {
+        ErrorsManager::addError("Patch Hacks Page: JSON parse error. Exception: " + std::string(e.what()), ErrorsManager::Error);
+        return false;
+    }
+    catch (const nlohmann::json::type_error& e) {
+        ErrorsManager::addError("Patch Hacks Page: JSON type error while processing data. Exception: " + std::string(e.what()), ErrorsManager::Error);
+        return false;
+    }
+    catch (const std::bad_alloc& e) {
+        ErrorsManager::addError("Patch Hacks Page: Memory allocation error. Exception: " + std::string(e.what()), ErrorsManager::Error);
+        return false;
+    }
+    catch (const std::ios_base::failure& e) {
+        ErrorsManager::addError("Patch Hacks Page: I/O operation failure. Exception: " + std::string(e.what()), ErrorsManager::Error);
+        return false;
+    }
+    catch (const std::exception& e) {
+        ErrorsManager::addError("Patch Hacks Page: Unknown error occurred. Exception: " + std::string(e.what()), ErrorsManager::Error);
+        return false;
+    }
 
-	return OK;
+    return true;
 }
 
 void PatchHacksPageManager::loadStatesFile() {
@@ -128,47 +173,17 @@ void PatchHacksPageManager::onTrySaveGame() {
 }
 
 void PatchHacksPageManager::onEditorPauseLayer(CCLayer* layer) {
-	if (std::find(activeLayers.begin(), activeLayers.end(), "EditorPauseLayer") == activeLayers.end()) return;
+	if (!isOk || std::find(activeLayers.begin(), activeLayers.end(), "EditorPauseLayer") == activeLayers.end()) return;
 	buildPatchHacksButton(layer);
 }
 
 void PatchHacksPageManager::onPauseLayer(PauseLayer* layer) {
-	if (std::find(activeLayers.begin(), activeLayers.end(), "PauseLayer") == activeLayers.end()) return;
+	if (!isOk || std::find(activeLayers.begin(), activeLayers.end(), "PauseLayer") == activeLayers.end()) return;
 	buildPatchHacksButton(layer);
 }
 
 void PatchHacksPageManager::onMenuLayer(MenuLayer* layer) {
-
-	if (loadingStatus != OK) {
-
-		std::string errorText;
-		switch (loadingStatus) {
-		case FileNotFound:
-			errorText = "Can't find 'hackPanel.json' in ./Resources";
-			break;
-		case ParsingError:
-			errorText = "Can't parse 'hackPanel.json'";
-			break;
-		case PatchFormatError:
-			errorText = "Can't parse patch format";
-			break;
-		case EmptyMenuError:
-			errorText = "There are no patchhacks to load";
-			break;
-		}
-
-		auto size = CCDirector::sharedDirector()->getWinSize();
-
-		auto errorLabel = CCLabelBMFont::create(errorText.c_str(), "bigFont.fnt");
-		errorLabel->setColor({ 255, 0, 0 });
-		errorLabel->setScale(0.4);
-		errorLabel->setPosition({ size.width / 2, size.height - 10 });
-		layer->addChild(errorLabel);
-
-		return;
-	}
-
-	if (std::find(activeLayers.begin(), activeLayers.end(), "MenuLayer") == activeLayers.end()) return;
+	if (!isOk || std::find(activeLayers.begin(), activeLayers.end(), "MenuLayer") == activeLayers.end()) return;
 	buildPatchHacksButton(layer);
 }
 

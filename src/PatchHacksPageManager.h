@@ -5,22 +5,14 @@ class PatchHack;
 
 class PatchHacksPageManager {
 
-	enum DataLoadingResult {
-		OK,
-		FileNotFound,
-		ParsingError,
-		PatchFormatError,
-		EmptyMenuError,
-	};
-
+	bool isOk = false;
 	std::vector<std::string> activeLayers;
 	std::vector<PatchHack*> hacks;
-	DataLoadingResult loadingStatus;
 	static PatchHacksPageManager* instance;
 
 	void init();
 
-	DataLoadingResult loadData();
+	bool loadData();
 
 	void loadStatesFile();
 	void saveStatesFile();
